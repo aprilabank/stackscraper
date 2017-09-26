@@ -1,5 +1,8 @@
 package `in`.tazj.stackscraper
 
+import `in`.tazj.stackscraper.PrometheusLine.HelpLine
+import `in`.tazj.stackscraper.PrometheusLine.MetricLine
+import `in`.tazj.stackscraper.PrometheusLine.TypeLine
 import org.jparsec.Parser
 import org.jparsec.Parsers
 import org.jparsec.Parsers.or
@@ -59,14 +62,14 @@ val TYPE_LINE = Parsers.sequence(
     Scanners.string("# TYPE").followedBy(Scanners.WHITESPACES.skipMany()),
     METRIC_NAME,
     METRIC_TYPE,
-    { _, name, type -> PrometheusLine.TypeLine(name, type) }
+    { _, name, type -> TypeLine(name, type) }
 )
 
 val HELP_LINE = Parsers.sequence(
     Scanners.string("# HELP").followedBy(Scanners.WHITESPACES.skipMany()),
     METRIC_NAME,
     Patterns.many(CharPredicates.notChar('\n')).toScanner("help").source(),
-    { _, name, help -> PrometheusLine.HelpLine(name, help) }
+    { _, name, help -> HelpLine(name, help) }
 )
 
 val LABEL = Parsers.sequence(
@@ -98,7 +101,7 @@ val METRIC_LINE = Parsers.sequence(
     METRIC_NAME,
     LABELS.asOptional(),
     VALUE,
-    { name, labels, value -> PrometheusLine.MetricLine(name, labels.orElse(emptyMap()), value) }
+    { name, labels, value -> MetricLine(name, labels.orElse(emptyMap()), value) }
 )
 
 val LINE: Parser<PrometheusLine> = Parsers.or(
@@ -114,8 +117,8 @@ val LINE: Parser<PrometheusLine> = Parsers.or(
 
 data class Accumulator(
     val result: List<Metric> = emptyList(),
-    val help: PrometheusLine.HelpLine? = null,
-    val type: PrometheusLine.TypeLine? = null
+    val help: HelpLine? = null,
+    val type: TypeLine? = null
 )
 
 fun combineLines(lines: List<PrometheusLine>): List<Metric> {
@@ -127,9 +130,9 @@ fun combineLines(lines: List<PrometheusLine>): List<Metric> {
 
 fun combineStep(acc: Accumulator, line: PrometheusLine): Accumulator {
     return when (line) {
-        is PrometheusLine.TypeLine -> acc.copy(type = line)
-        is PrometheusLine.HelpLine -> acc.copy(help = line)
-        is PrometheusLine.MetricLine -> acc.copy(
+        is TypeLine -> acc.copy(type = line)
+        is HelpLine -> acc.copy(help = line)
+        is MetricLine -> acc.copy(
             result = acc.result.plus(combineMetric(acc.help, acc.type, line)),
             help = null,
             type = null
@@ -137,7 +140,7 @@ fun combineStep(acc: Accumulator, line: PrometheusLine): Accumulator {
     }
 }
 
-fun combineMetric(help: PrometheusLine.HelpLine?, type: PrometheusLine.TypeLine?, metric: PrometheusLine.MetricLine): Metric {
+fun combineMetric(help: HelpLine?, type: TypeLine?, metric: MetricLine): Metric {
     return Metric(
         name = metric.name,
         type = type?.type ?: MetricType.Untyped,
