@@ -91,27 +91,7 @@ class StackdriverClient(
             prepareMetricDescriptor(it)
         }
 
-        val timeSeriesList = result.metrics.map {
-            val typedValue = TypedValue.newBuilder()
-                .setDoubleValue(it.value)
-                .build()
-
-            val point = Point.newBuilder()
-                .setValue(typedValue)
-                .setInterval(interval)
-                .build()
-
-            val metric = StackdriverMetric.newBuilder()
-                .setType(metricsTypeFor(it))
-                .putAllLabels(it.labels)
-                .build()
-
-            TimeSeries.newBuilder()
-                .setMetric(metric)
-                .setResource(resource)
-                .addPoints(point)
-                .build()
-        }
+        val timeSeriesList = result.metrics.map { it.toTimeSeries(interval, resource) }
 
         val request = CreateTimeSeriesRequest.newBuilder()
             .setNameWithProjectName(projectName)
@@ -119,6 +99,28 @@ class StackdriverClient(
             .build()
 
         client.createTimeSeries(request)
+    }
+
+    fun Metric.toTimeSeries(interval: TimeInterval, resource: MonitoredResource): TimeSeries {
+        val typedValue = TypedValue.newBuilder()
+            .setDoubleValue(this.value)
+            .build()
+
+        val point = Point.newBuilder()
+            .setValue(typedValue)
+            .setInterval(interval)
+            .build()
+
+        val metric = StackdriverMetric.newBuilder()
+            .setType(metricsTypeFor(this))
+            .putAllLabels(this.labels)
+            .build()
+
+        return TimeSeries.newBuilder()
+            .setMetric(metric)
+            .setResource(resource)
+            .addPoints(point)
+            .build()
     }
 
     fun prepareMetricDescriptor(metric: Metric) {
