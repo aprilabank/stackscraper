@@ -17,9 +17,12 @@ import com.google.monitoring.v3.TimeSeries
 import com.google.monitoring.v3.TypedValue
 import com.google.protobuf.util.Timestamps
 import org.slf4j.LoggerFactory
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentMap
 import java.util.concurrent.atomic.AtomicInteger
 
 typealias StackdriverMetric = com.google.api.Metric
+typealias StackdriverMetricType = String
 
 // All monitored resources are GKE containers. Documented here: https://cloud.google.com/monitoring/api/resources
 const val GKE_CONTAINER = "gke_container"
@@ -62,7 +65,7 @@ https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.metricDescriptor
 
 */
 
-fun metricsTypeFor(metric: Metric): String {
+fun metricsTypeFor(metric: Metric): StackdriverMetricType {
     return "$CUSTOM_METRIC_DOMAIN/${metric.name}"
 }
 
@@ -73,6 +76,10 @@ class StackdriverClient(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
     private val projectName = ProjectName.create(projectId)
+
+    // This map is used as a sort of cache of metric descriptors that have already been created / loaded.
+    private val descriptors: ConcurrentMap<StackdriverMetricType, MetricDescriptorName> = ConcurrentHashMap()
+
 
     fun publishMetrics(result: ScrapeResult) {
         log.info(
@@ -88,7 +95,7 @@ class StackdriverClient(
 
         // ensure all metrics descriptors exist:
         result.metrics.parallelStream().forEach {
-            prepareMetricDescriptor(it)
+            checkMetricDescriptor(it)
         }
 
         val timeSeriesList = result.metrics.map { it.toTimeSeries(interval, resource) }
@@ -123,22 +130,27 @@ class StackdriverClient(
             .build()
     }
 
-    fun prepareMetricDescriptor(metric: Metric) {
-        val name = MetricDescriptorName.create(projectId, metricsTypeFor(metric))
+    fun checkMetricDescriptor(metric: Metric) {
+        val type = metricsTypeFor(metric)
+        descriptors.computeIfAbsent(type) {
+            val name = MetricDescriptorName.create(projectId, type)
 
-        log.debug("Attempting to find metrics descriptor {}", name)
+            log.debug("Attempting to find metrics descriptor {}", name)
 
-        if (name.existsInService()) {
-            log.debug("Found metric descriptor: {}", name)
-        } else {
-            val descriptor = createMetricDescriptor(metric)
-            val created = client.createMetricDescriptor(projectName, descriptor)
-            awaitDescriptor(name)
-            log.info("Created metric descriptor '{}'", created.name)
+            if (name.existsInService()) {
+                log.debug("Found metric descriptor: {}", name)
+            } else {
+                val descriptor = createMetricDescriptor(metric)
+                val created = client.createMetricDescriptor(projectName, descriptor)
+                awaitDescriptor(name)
+                log.info("Created metric descriptor '{}'", created.name)
+            }
+
+            return@computeIfAbsent name
         }
     }
 
-    fun awaitDescriptor(name: MetricDescriptorName) {
+    private fun awaitDescriptor(name: MetricDescriptorName) {
         val counter = AtomicInteger(0)
         while (!name.existsInService()) {
             log.debug("{} does not exist after {} attempts, sleeping...", name, counter.getAndIncrement())
@@ -155,7 +167,7 @@ class StackdriverClient(
         }
     }
 
-    fun createMetricDescriptor(metric: Metric): MetricDescriptor {
+    private fun createMetricDescriptor(metric: Metric): MetricDescriptor {
         return MetricDescriptor.newBuilder().apply {
             type = metricsTypeFor(metric)
             metricKind = GAUGE
