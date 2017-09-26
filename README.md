@@ -1,3 +1,10 @@
+# Here be dragons!
+
+This is an **alpha** project and this is *not* the project's final repository
+location.
+
+--------------
+
 Stackscraper Monitoring
 =======================
 
@@ -18,10 +25,36 @@ standard Prometheus scraping protocol and then piping them into Google Stackdriv
 It is solely intended to be run in Kubernetes clusters and relies heavily on
 the Kubernetes API.
 
-## Questions
+## Overview
 
-* Discovery: Not quite sure yet, there used to be annotations on k8s objects?
-* Scraping metrics: Is there a lib for _reading_ metrics? Or only for exposing?
-* How to map Prometheus metrics to Stackdriver metrics?
-** monitored resource <-> pod (?)  / service (?)
-** endpoint disambiguation: one metric per pod? Labels?
+Right now this project is only concerned with monitoring services that run
+inside of Prometheus.
+
+This is done by following three annotations on `Service` objects:
+
+* `prometheus.io/scrape`: Can be set to `"true"` (yes, as a string!) to enable
+  metrics scraping for this service.
+* `prometheus.io/port`: Override the default port (80) used for scraping.
+* `prometheus.io/path`: Override the default path (`/metrics`) used for scraping.
+
+Stackscraper will resolve the endpoints of the `Service` and scrape all pods
+individually. Every pod will become a distinct "monitored resource" in Stackdriver.
+
+## Caveats
+
+There are a lot of caveats right now, this is a young alpha project after all!
+
+* Only `gauge` and `untyped` Prometheus metrics are supported right now. Not all
+  Prometheus metric types have an equivalent Stackdriver type, so this is not
+  guaranteed to change much.
+* Metric labels are static after creation
+* This is not actually production-ready code (it does a lot more API calls than
+  it should for basic operation right now, don't use it).
+
+## Prometheus scraping
+
+A short note on scraping: I didn't find an existing scraper/parser in the Java
+world so I [wrote one](src/main/kotlin/in/tazj/stackscraper/PrometheusParser.kt).
+
+If there is an existing project for this feel free to ping me about it!
+
