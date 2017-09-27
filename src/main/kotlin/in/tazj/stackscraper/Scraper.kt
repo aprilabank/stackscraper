@@ -6,12 +6,14 @@ import com.google.api.client.http.javanet.NetHttpTransport
 
 private val requestFactory = NetHttpTransport.Builder().build().createRequestFactory()
 
+class ScrapingException(message: String) : Exception(message)
+
 fun ScrapeTarget.scrape(): List<ScrapeResult> {
     return urls.map {
         val response = requestFactory.buildGetRequest(it.url).execute()
 
         if (!response.isSuccessStatusCode) {
-            throw RuntimeException("Oh no!")
+            throw ScrapingException("Error scraping ${it.name}: ${response.statusMessage} (${response.statusCode})")
         }
 
         val metrics = PROMETHEUS_TEXT_FORMAT
