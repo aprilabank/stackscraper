@@ -10,10 +10,17 @@
     <description>A bridge to scrape Prometheus metrics into Google Stackdriver</description>
 
     <properties>
-        <kotlin.compiler.incremental>true</kotlin.compiler.incremental>
+        <!-- General settings -->
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.mainClass>in.tazj.stackscraper.MainKt</project.mainClass>
+
+        <!-- Kotlin compiler settings -->
         <kotlin.compiler.jvmTarget>1.8</kotlin.compiler.jvmTarget>
         <kotlin.version>1.1.50</kotlin.version>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- Docker image building settings -->
+        <image.base>openjdk:8</image.base>
+        <image.name>tazjin/stackscraper:${project.version}</image.name>
     </properties>
 
     <build>
@@ -41,6 +48,40 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.0.2</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <addClasspath>true</addClasspath>
+                            <mainClass>${project.mainClass}</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>io.fabric8</groupId>
+                <artifactId>docker-maven-plugin</artifactId>
+                <version>0.22.1</version>
+                <configuration>
+                    <!-- The 'verbose' setting controls whether build step output should be logged (it should!) -->
+                    <verbose>true</verbose>
+                    <images>
+                        <image>
+                            <name>${image.name}</name>
+                            <build>
+                                <from>${image.base}</from>
+                                <assembly>
+                                    <descriptorRef>artifact-with-dependencies</descriptorRef>
+                                </assembly>
+                                <cmd>java -jar maven/${project.name}-${project.version}.jar</cmd>
+                            </build>
+                        </image>
+                    </images>
+                </configuration>
             </plugin>
         </plugins>
     </build>
