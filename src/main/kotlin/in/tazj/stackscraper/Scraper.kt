@@ -8,6 +8,8 @@ import io.fabric8.kubernetes.api.model.Endpoints
 import io.fabric8.kubernetes.api.model.ObjectMeta
 import io.fabric8.kubernetes.api.model.Service
 import io.fabric8.kubernetes.client.KubernetesClient
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentMap
 
 private val requestFactory = NetHttpTransport.Builder().build().createRequestFactory()
 
@@ -18,6 +20,7 @@ const val SCRAPE_PORT = "prometheus.io/port"
 data class ScrapeAddress(
     val name: String,
     val node: String,
+    val nodeZone: String,
     val url: GenericUrl
 )
 
@@ -85,6 +88,15 @@ class Scraper(private val client: KubernetesClient) {
 
     }
 
+    private val nodeZoneCache: ConcurrentMap<String, String> = ConcurrentHashMap()
+
+    private fun findNodeZone(nodeName: String): String {
+        return nodeZoneCache.computeIfAbsent(nodeName) {
+            val node = client.nodes().withName(nodeName).get()
+            node.metadata.labels["failure-domain.beta.kubernetes.io/zone"] ?: "unknown"
+        }
+    }
+
     private fun prepareTarget(svc: Service): ScrapeTarget {
         val endpoints = findEndpoint(svc)
             ?.let { it.subsets.flatMap { it.addresses } }
@@ -95,6 +107,7 @@ class Scraper(private val client: KubernetesClient) {
             ScrapeAddress(
                 it.targetRef.name,
                 it.nodeName,
+                findNodeZone(it.nodeName),
                 prepareUrl(svc.metadata.namespace, svc.metadata.name)
             )
         }

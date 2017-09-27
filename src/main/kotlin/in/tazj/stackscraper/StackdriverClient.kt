@@ -40,7 +40,7 @@ private fun gkeContainer(
         "container_name" to result.target.name,
         "pod_id" to result.address.name,
         "instance_id" to result.address.node,
-        "zone" to "europe-west1-d" // TODO: Get this from k8s
+        "zone" to result.address.nodeZone
     )
 
     return MonitoredResource.newBuilder()
@@ -79,7 +79,6 @@ class StackdriverClient(
 
     // This map is used as a sort of cache of metric descriptors that have already been created / loaded.
     private val descriptors: ConcurrentMap<StackdriverMetricType, MetricDescriptorName> = ConcurrentHashMap()
-
 
     fun publishMetrics(result: ScrapeResult) {
         log.info(
