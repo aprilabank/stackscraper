@@ -1,7 +1,5 @@
-import `in`.tazj.stackscraper.Discovery
-import `in`.tazj.stackscraper.ScrapeTarget
-import `in`.tazj.stackscraper.StackdriverClient
-import `in`.tazj.stackscraper.scrape
+package `in`.tazj.stackscraper
+
 import com.google.cloud.ServiceOptions
 import com.google.cloud.monitoring.v3.MetricServiceClient
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
