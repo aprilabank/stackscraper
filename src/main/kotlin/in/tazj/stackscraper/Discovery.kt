@@ -55,8 +55,6 @@ class Discovery(private val client: KubernetesClient) {
             val path = svc.metadata.getScrapePath()
             val url = "http://${address.ip}:$port$path"
 
-            println("URL: ${url}")
-
             return GenericUrl(url)
         }
     }
