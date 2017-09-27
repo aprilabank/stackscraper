@@ -1,6 +1,7 @@
 package `in`.tazj.stackscraper
 
 import com.google.api.client.http.GenericUrl
+import io.fabric8.kubernetes.api.model.EndpointAddress
 import io.fabric8.kubernetes.api.model.Endpoints
 import io.fabric8.kubernetes.api.model.ObjectMeta
 import io.fabric8.kubernetes.api.model.Service
@@ -49,8 +50,13 @@ private fun ObjectMeta.getScrapePort(): String {
 class Discovery(private val client: KubernetesClient) {
     companion object {
         // TODO: Create actual in-cluster URLs instead of local test stuff
-        fun prepareUrl(namespace: String, service: String): GenericUrl {
-            val url = "http://localhost:8001/api/v1/namespaces/$namespace/services/$service:http/proxy/metrics"
+        fun prepareUrl(svc: Service, address: EndpointAddress): GenericUrl {
+            val port = svc.metadata.getScrapePort()
+            val path = svc.metadata.getScrapePath()
+            val url = "http://${address.ip}:$port$path"
+
+            println("URL: ${url}")
+
             return GenericUrl(url)
         }
     }
@@ -69,13 +75,12 @@ class Discovery(private val client: KubernetesClient) {
             ?.let { it.subsets.flatMap { it.addresses } }
             ?: emptyList()
 
-        // TODO: The take(1) is for local test development
-        val addresses = endpoints.take(1).map {
+        val addresses = endpoints.map {
             ScrapeAddress(
                 it.targetRef.name,
                 it.nodeName,
                 findNodeZone(it.nodeName),
-                prepareUrl(svc.metadata.namespace, svc.metadata.name)
+                prepareUrl(svc, it)
             )
         }
 
