@@ -4,6 +4,8 @@ import com.google.cloud.ServiceOptions
 import com.google.cloud.monitoring.v3.MetricServiceClient
 import io.fabric8.kubernetes.client.DefaultKubernetesClient
 import org.slf4j.LoggerFactory
+import sun.misc.Signal
+import sun.misc.SignalHandler
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -26,6 +28,7 @@ fun main(args: Array<String>) {
 
     val targets: AtomicReference<List<ScrapeTarget>> = AtomicReference(emptyList())
     val scheduler = Executors.newSingleThreadScheduledExecutor()
+    registerSignalHandlers(Runnable { scheduler.shutdown() })
 
     val discoverTask = exceptionalRunnable("discover") {
         targets.set(discovery.findAllTargets())
@@ -76,4 +79,18 @@ private fun exceptionalRunnable(name: String, exit: Boolean = false, task: () ->
  * */
 private fun discoverProjectId(): String {
     return System.getenv("STACKDRIVER_PROJECT") ?: ServiceOptions.getDefaultProjectId()
+}
+
+/**
+ * Handle UNIX signals sent by Kubernetes on application shutdown.
+ */
+private fun registerSignalHandlers(cleanup: Runnable) {
+    val handler = SignalHandler { signal ->
+        log.info("Shutting down due to signal {}", signal.toString())
+        cleanup.run()
+        System.exit(0)
+    }
+
+    Signal.handle(Signal("INT"), handler)
+    Signal.handle(Signal("TERM"), handler)
 }
