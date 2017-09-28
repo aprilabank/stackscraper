@@ -1,5 +1,6 @@
 package `in`.tazj.stackscraper
 
+import `in`.tazj.stackscraper.MetricType.*
 import `in`.tazj.stackscraper.PrometheusLine.HelpLine
 import `in`.tazj.stackscraper.PrometheusLine.MetricLine
 import `in`.tazj.stackscraper.PrometheusLine.TypeLine
@@ -7,6 +8,7 @@ import org.jparsec.Parser
 import org.jparsec.Parsers
 import org.jparsec.Parsers.or
 import org.jparsec.Scanners
+import org.jparsec.Scanners.*
 import org.jparsec.Terminals
 import org.jparsec.pattern.CharPredicates
 import org.jparsec.pattern.Patterns
@@ -48,25 +50,25 @@ data class Metric(
 )
 
 val METRIC_TYPE: Parser<MetricType> = or(
-    Scanners.string("counter").retn(MetricType.Counter),
-    Scanners.string("gauge").retn(MetricType.Gauge),
-    Scanners.string("histogram").retn(MetricType.Histogram),
-    Scanners.string("summary").retn(MetricType.Summary),
-    Scanners.string("untyped").retn(MetricType.Untyped)
+    string("counter").retn(Counter),
+    string("gauge").retn(Gauge),
+    string("histogram").retn(Histogram),
+    string("summary").retn(Summary),
+    string("untyped").retn(Untyped)
 )
 
 // TODO: This allows underscores, but should technically allow colons, too.
-val METRIC_NAME = Scanners.IDENTIFIER.source().followedBy(Scanners.WHITESPACES.skipMany())
+val METRIC_NAME = IDENTIFIER.source().followedBy(WHITESPACES.skipMany())
 
 val TYPE_LINE = Parsers.sequence(
-    Scanners.string("# TYPE").followedBy(Scanners.WHITESPACES.skipMany()),
+    string("# TYPE").followedBy(WHITESPACES.skipMany()),
     METRIC_NAME,
     METRIC_TYPE,
     { _, name, type -> TypeLine(name, type) }
 )
 
 val HELP_LINE = Parsers.sequence(
-    Scanners.string("# HELP").followedBy(Scanners.WHITESPACES.skipMany()),
+    string("# HELP").followedBy(WHITESPACES.skipMany()),
     METRIC_NAME,
     Patterns.many(CharPredicates.notChar('\n')).toScanner("help").source(),
     { _, name, help -> HelpLine(name, help) }
@@ -74,18 +76,18 @@ val HELP_LINE = Parsers.sequence(
 
 val LABEL = Parsers.sequence(
     Patterns.WORD.toScanner("key").source(),
-    Scanners.isChar('='),
+    isChar('='),
     Terminals.StringLiteral.DOUBLE_QUOTE_TOKENIZER,
     { key, _, value -> Pair(key, value) }
 )
 
 val LABELS: Parser<Map<String, String>> = Parsers.between(
-    Scanners.isChar('{'),
+    isChar('{'),
     LABEL
-        .sepEndBy(Scanners.isChar(','))
+        .sepEndBy(isChar(','))
         .map { it.toMap() },
-    Scanners.isChar('}')
-).followedBy(Scanners.WHITESPACES.skipMany())
+    isChar('}')
+).followedBy(WHITESPACES.skipMany())
 
 val NUMBER = Parsers.or(
     Patterns.SCIENTIFIC_NOTATION.toScanner("scientific"),
@@ -93,7 +95,7 @@ val NUMBER = Parsers.or(
 )
 
 val VALUE = Parsers.or(
-    Scanners.isChar('-').next(NUMBER),
+    isChar('-').next(NUMBER),
     NUMBER
 ).source().map { it.toDouble() }
 
@@ -143,7 +145,7 @@ fun combineStep(acc: Accumulator, line: PrometheusLine): Accumulator {
 fun combineMetric(help: HelpLine?, type: TypeLine?, metric: MetricLine): Metric {
     return Metric(
         name = metric.name,
-        type = type?.type ?: MetricType.Untyped,
+        type = type?.type ?: Untyped,
         help = help?.help,
         labels = metric.labels,
         value = metric.value
@@ -151,5 +153,5 @@ fun combineMetric(help: HelpLine?, type: TypeLine?, metric: MetricLine): Metric 
 }
 
 val PROMETHEUS_TEXT_FORMAT = LINE
-    .sepEndBy(Scanners.WHITESPACES)
+    .sepEndBy(WHITESPACES)
     .map { combineLines(it) }
